@@ -35,7 +35,7 @@ typedef struct element {
 	Ndata data;
 	char * filedata;
 	struct element * parent;
-	struct element * child;
+	struct element * firstchild;
 	struct element * next;
 } Node;
 
@@ -43,8 +43,41 @@ long freememory;
 Node * Root;
 
 
+int check_path(const char * path, Node * n) {
+
+	char temp[MAX_NAME];
+	strncpy(temp, path, MAX_NAME);
+
+	if(strcmp(path, "/") == 0) {
+	   n = Root;
+	   return 1;		
+	}
+
+	char * ele = strtok(temp, "/");
+	Node * parent = Root;
+	Node * childptr = NULL;
+	while (ele != NULL) {
+		int found = 0;
+		childptr = parent->firstchild;
+		while (childptr != NULL) {
+			if(strcmp(childptr->data.name, ele) == 0) {
+				found = 1;
+				break;
+			}
+			childptr = childptr->next;
+		}
+		if (!found) {n = NULL; return 0;}
+
+		ele = strtok(NULL, "/");
+		parent = childptr;
+	}
+	n = childptr;
+	return 1;
+}
+
 static int ram_getattr(const char *path, struct stat *stbuf)
 {
+	/*
 	FILE *fp;
 	fp = fopen("/home/agupta27/log.txt","a+");
 	fprintf(fp, "%s\n", "getattr");
@@ -64,9 +97,17 @@ static int ram_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_size = strlen(hello_str);
 	} else
 		res = -ENOENT;
-
-	return res;
+	*/
+	Node *t = NULL;
+	int valid = check_path(path, t);
+	if (!valid) {
+		return -ENOENT;
+	} else {
+		*stbuf = t->data.st;
+		return 0;
+	}
 }
+
 
 static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
@@ -98,12 +139,11 @@ static int ram_open(const char *path, struct fuse_file_info *fi)
 	fprintf(fp, "%s\n", path);
 	fclose(fp);
 	
-	if (strcmp(path, hello_path) != 0)
+	Node *p= NULL;
+	int valid = check_path(path, p);
+	if (!valid) {
 		return -ENOENT;
-
-	if ((fi->flags & 3) != O_RDONLY)
-		return -EACCES;
-
+	}
 	return 0;
 }
 
