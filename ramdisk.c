@@ -15,7 +15,9 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <stdlib.h>
+
 
 #define MAX_NAME 512
 
@@ -43,6 +45,20 @@ long freememory;
 Node * Root;
 
 
+int allocate_node(Node ** node) {
+
+	if (freememory < sizeof(Node)) {
+		return -ENOSPC;
+	}
+
+	*node = calloc(1, sizeof(Node));
+	if (*node == NULL) {
+		return -ENOSPC;
+	} else {
+		freememory = freememory - sizeof(Node);
+		return 0;
+	}
+}
 int check_path(const char * path, Node * n) {
 
 	char temp[MAX_NAME];
@@ -77,27 +93,7 @@ int check_path(const char * path, Node * n) {
 
 static int ram_getattr(const char *path, struct stat *stbuf)
 {
-	/*
-	FILE *fp;
-	fp = fopen("/home/agupta27/log.txt","a+");
-	fprintf(fp, "%s\n", "getattr");
-	fprintf(fp, "%s\n", path);
-	fclose(fp);
-	
-	int res = 0;
 
-	memset(stbuf, 0, sizeof(struct stat));
-	if (strcmp(path, "/") == 0) {
-		//stbuf->st_mode = S_IFDIR | 0755;
-		//stbuf->st_nlink = 2;
-		*stbuf = Root->data.st;
-	} else if (strcmp(path, hello_path) == 0) {
-		stbuf->st_mode = S_IFREG | 0444;
-		stbuf->st_nlink = 1;
-		stbuf->st_size = strlen(hello_str);
-	} else
-		res = -ENOENT;
-	*/
 	Node *t = NULL;
 	int valid = check_path(path, t);
 	if (!valid) {
@@ -112,21 +108,26 @@ static int ram_getattr(const char *path, struct stat *stbuf)
 static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
-	FILE *fp;
-	fp = fopen("/home/agupta27/log.txt","a+");
-	fprintf(fp, "%s\n", "readdir");
-	fprintf(fp, "%s\n", path);
-	fclose(fp);
+    
+    time_t T;
+    time(&T);
 
-	(void) offset;
-	(void) fi;
-
-	if (strcmp(path, "/") != 0)
+    Node * parent = NULL;
+	
+	int valid = check_path(path, parent);
+	if (!valid) {
 		return -ENOENT;
+	}
 
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
-	filler(buf, hello_path + 1, NULL, 0);
+	
+	Node * temp = NULL;
+
+	for(temp = parent->firstchild; temp; temp = temp->next) {
+		filler(buf, temp->data.name, NULL, 0);
+	}
+	parent->data.st.st_atime = T;
 
 	return 0;
 }
@@ -173,11 +174,67 @@ static int ram_read(const char *path, char *buf, size_t size, off_t offset,
 	return size;
 }
 
+void init_for_dir(Node * newchild, char * dname) {
+	
+	newchild->data.isdir = 1;
+	strcpy(newchild->data.name, dname);
+
+	newchild->data.st.st_nlink = 2;   // . and ..
+	newchild->data.st.st_uid = getuid();
+	newchild->data.st.st_gid = getgid();
+	newchild->data.st.st_mode = S_IFDIR |  0755; //755 is default directory permissions
+
+	newchild->data.st.st_size = 4096;
+
+	time_t T;
+	time(&T);
+
+	newchild->data.st.st_atime = T;
+	newchild->data.st.st_mtime = T;
+	newchild->data.st.st_ctime = T;
+}
+
+static int ram_mkdir(const char *path, mode_t mode) {
+
+	Node *parent = NULL;
+	int valid = check_path(path, parent);
+
+	if(valid) {
+		return -EEXIST;
+	}
+
+	char * ptr = strrchr(path, '/');
+	char tmp[MAX_NAME];
+	strncpy(tmp, path, ptr - path);
+    tmp[ptr - path] = '\0';
+
+	valid = check_path(tmp, parent);
+	if (!valid) {
+		return -EEXIST;
+	}
+	Node * newchild = NULL;
+	int ret = allocate_node(&newchild);
+
+	if(ret != 0) {
+		return ret;
+	}
+
+    ptr++;
+    init_for_dir(newchild, ptr);
+	
+	newchild->parent = parent;
+	newchild->next = parent->firstchild;
+	parent->firstchild = newchild;
+
+	return 0;
+}
+
 static struct fuse_operations hello_oper = {
 	.getattr	= ram_getattr,
 	.readdir	= ram_readdir,
 	.open		= ram_open,
 	.read		= ram_read,
+	.mkdir		= ram_mkdir,
 };
 
 int main(int argc, char *argv[])
