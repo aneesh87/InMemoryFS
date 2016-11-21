@@ -175,6 +175,13 @@ static int ram_read(const char *path, char *buf, size_t size, off_t offset,
 	return size;
 }
 
+
+static int ram_utime(const char *path, struct utimbuf *ubuf)
+{
+	// Do Nothing
+	return 0;
+}
+
 void init_for_dir(Node * newchild, char * dname) {
 	
 	newchild->data.isdir = 1;
@@ -186,6 +193,25 @@ void init_for_dir(Node * newchild, char * dname) {
 	newchild->data.st.st_mode = S_IFDIR |  0755; //755 is default directory permissions
 
 	newchild->data.st.st_size = 4096;
+
+	time_t T;
+	time(&T);
+
+	newchild->data.st.st_atime = T;
+	newchild->data.st.st_mtime = T;
+	newchild->data.st.st_ctime = T;
+}
+
+void init_for_file(Node * newchild, char * fname, mode_t mode) {
+	
+	newchild->data.isdir = 0;
+	strcpy(newchild->data.name, fname);
+
+	newchild->data.st.st_size = 0;
+	newchild->data.st.st_nlink = 1;   
+	newchild->data.st.st_uid = getuid();
+	newchild->data.st.st_gid = getgid();
+	newchild->data.st.st_mode = S_IFREG | mode;
 
 	time_t T;
 	time(&T);
@@ -232,12 +258,51 @@ static int ram_mkdir(const char *path, mode_t mode) {
 	return 0;
 }
 
+static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+
+	Node *parent = NULL;
+	int valid = check_path(path, &parent);
+
+	if(valid) {
+		return -EEXIST;
+	}
+
+	char * ptr = strrchr(path, '/');
+	char tmp[MAX_NAME];
+	strncpy(tmp, path, ptr - path);
+    tmp[ptr - path] = '\0';
+
+	valid = check_path(tmp, &parent);
+	if (!valid) {
+		return -ENOENT;
+	}
+	Node * newchild = NULL;
+	int ret = allocate_node(&newchild);
+
+	if(ret != 0) {
+		return ret;
+	}
+
+    ptr++;
+    init_for_file(newchild, ptr, mode);
+	
+	parent->data.st.st_nlink = parent->data.st.st_nlink + 1;
+
+	newchild->parent = parent;
+	newchild->next = parent->firstchild;
+	parent->firstchild = newchild;
+
+	return 0;
+}
+
 static struct fuse_operations hello_oper = {
 	.getattr	= ram_getattr,
 	.readdir	= ram_readdir,
 	.open		= ram_open,
 	.read		= ram_read,
+	.utime      = ram_utime,
 	.mkdir		= ram_mkdir,
+	.create     = ram_create,
 };
 
 int main(int argc, char *argv[])
