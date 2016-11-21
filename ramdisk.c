@@ -59,13 +59,13 @@ int allocate_node(Node ** node) {
 		return 0;
 	}
 }
-int check_path(const char * path, Node * n) {
+int check_path(const char * path, Node ** n) {
 
 	char temp[MAX_NAME];
 	strncpy(temp, path, MAX_NAME);
 
-	if(strcmp(path, "/") == 0) {
-	   n = Root;
+	if(strcmp(path, "/") == 0 || strcmp(path, "") == 0) {
+	   *n = Root;
 	   return 1;		
 	}
 
@@ -82,12 +82,12 @@ int check_path(const char * path, Node * n) {
 			}
 			childptr = childptr->next;
 		}
-		if (!found) {n = NULL; return 0;}
+		if (!found) {*n = NULL; return 0;}
 
 		ele = strtok(NULL, "/");
 		parent = childptr;
 	}
-	n = childptr;
+	*n = childptr;
 	return 1;
 }
 
@@ -95,7 +95,7 @@ static int ram_getattr(const char *path, struct stat *stbuf)
 {
 
 	Node *t = NULL;
-	int valid = check_path(path, t);
+	int valid = check_path(path, &t);
 	if (!valid) {
 		return -ENOENT;
 	} else {
@@ -114,7 +114,7 @@ static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     Node * parent = NULL;
 	
-	int valid = check_path(path, parent);
+	int valid = check_path(path, &parent);
 	if (!valid) {
 		return -ENOENT;
 	}
@@ -129,6 +129,7 @@ static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	}
 	parent->data.st.st_atime = T;
 
+
 	return 0;
 }
 
@@ -141,7 +142,7 @@ static int ram_open(const char *path, struct fuse_file_info *fi)
 	fclose(fp);
 	
 	Node *p= NULL;
-	int valid = check_path(path, p);
+	int valid = check_path(path, &p);
 	if (!valid) {
 		return -ENOENT;
 	}
@@ -197,7 +198,7 @@ void init_for_dir(Node * newchild, char * dname) {
 static int ram_mkdir(const char *path, mode_t mode) {
 
 	Node *parent = NULL;
-	int valid = check_path(path, parent);
+	int valid = check_path(path, &parent);
 
 	if(valid) {
 		return -EEXIST;
@@ -208,9 +209,9 @@ static int ram_mkdir(const char *path, mode_t mode) {
 	strncpy(tmp, path, ptr - path);
     tmp[ptr - path] = '\0';
 
-	valid = check_path(tmp, parent);
+	valid = check_path(tmp, &parent);
 	if (!valid) {
-		return -EEXIST;
+		return -ENOENT;
 	}
 	Node * newchild = NULL;
 	int ret = allocate_node(&newchild);
@@ -222,6 +223,8 @@ static int ram_mkdir(const char *path, mode_t mode) {
     ptr++;
     init_for_dir(newchild, ptr);
 	
+	parent->data.st.st_nlink = parent->data.st.st_nlink + 1;
+
 	newchild->parent = parent;
 	newchild->next = parent->firstchild;
 	parent->firstchild = newchild;
@@ -283,6 +286,7 @@ int main(int argc, char *argv[])
 	time_t T;
 	time(&T);
 
+	Root->data.st.st_size = 4096;
 	Root->data.st.st_atime = T;
 	Root->data.st.st_mtime = T;
 	Root->data.st.st_ctime = T;
