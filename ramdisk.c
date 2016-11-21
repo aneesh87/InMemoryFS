@@ -410,7 +410,7 @@ void remove_from_ds (Node * child) {
 	}
 }
 
-static int ramdisk_rmdir(const char *path) {
+static int ram_rmdir(const char *path) {
 	Node * node = NULL;
 	int valid = check_path(path, &node);
 	if (!valid) {
@@ -424,17 +424,38 @@ static int ramdisk_rmdir(const char *path) {
 	return 0;
 }
 
+static int ram_unlink(const char* path) {
+	
+	Node * node = NULL;
+        int valid = check_path(path, &node);
+        if (!valid) {
+            return -ENOENT;
+        }
+        if (node->data.isdir) { return -EISDIR;}
+	remove_from_ds(node);
+	long freed_mem = sizeof(Node);
+	if (node->filedata != NULL) {
+	   freed_mem = freed_mem + node->data.st.st_size;
+	   free(node->filedata);
+	   node->filedata = NULL;
+	}
+	free(node);
+	freememory = freememory + freed_mem;
+	return 0;
+}
+
 static struct fuse_operations hello_oper = {
 	.getattr	= ram_getattr,
 	.readdir	= ram_readdir,
 	.open		= ram_open,
 	.read		= ram_read,
 	.utime      = ram_utime,
-	.rmdir		= ramdisk_rmdir,
+	.rmdir		= ram_rmdir,
 	.mkdir		= ram_mkdir,
 	.create     = ram_create,
         .write          = ram_write,
 	.truncate	= ram_truncate,
+	.unlink 	= ram_unlink,        
 };
 
 int main(int argc, char *argv[])
