@@ -58,6 +58,14 @@ int allocate_node(Node ** node) {
 		return 0;
 	}
 }
+
+void change_timestamps_dir(Node * parent) {
+	time_t T;
+	time(&T);
+	parent->data.st.st_ctime = T;
+	parent->data.st.st_mtime = T;
+}
+
 int check_path(const char * path, Node ** n) {
 
 	char temp[MAX_NAME];
@@ -266,6 +274,8 @@ static int ram_mkdir(const char *path, mode_t mode) {
 	newchild->next = parent->firstchild;
 	parent->firstchild = newchild;
 
+	change_timestamps_dir(parent);
+
 	return 0;
 }
 
@@ -389,6 +399,8 @@ static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	newchild->next = parent->firstchild;
 	parent->firstchild = newchild;
 
+	change_timestamps_dir(parent);
+
 	return 0;
 }
 
@@ -409,6 +421,7 @@ void remove_from_ds (Node * child) {
 	    }
 	}
 	parent->data.st.st_nlink--;
+	change_timestamps_dir(parent);
 }
 
 static int ram_rmdir(const char *path) {
@@ -470,17 +483,11 @@ static int ram_rename(const char * from, const char * to) {
     	if (!valid) {
     		return -ENOENT;
     	}
-    	// Only have to rename file/dir
-    	if (node2 == node1->parent) { 
-    		//Quickly Exit
-    		strncpy(node1->data.name, ptr, MAX_NAME);
-    		return 0;
-    	}
 
 	} else {  // To path exists
 		if (node2->data.isdir) {		
 			if (node2->firstchild) {
-				return -EEXIST;
+				return -ENOTEMPTY;
 			}
 			node2 = node2->parent;
     		ram_rmdir(to);
@@ -495,6 +502,12 @@ static int ram_rename(const char * from, const char * to) {
     node2->firstchild = node1;
     node2->data.st.st_nlink++;
     strncpy(node1->data.name, ptr, MAX_NAME);
+    
+    time_t T;
+    time(&T);
+    node1->data.st.st_ctime = T;
+	
+	change_timestamps_dir(node2);
 	return 0;
 }
 
