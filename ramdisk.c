@@ -511,6 +511,19 @@ static int ram_rename(const char * from, const char * to) {
 	return 0;
 }
 
+
+static int ram_opendir(const char *path, struct fuse_file_info *fi) {
+	Node *p= NULL;
+	int valid = check_path(path, &p);
+	if (!valid) {
+		return -ENOENT;
+	}
+	if (!p->data.isdir) {
+		return -ENOTDIR;
+	}
+	return 0;
+}
+
 static struct fuse_operations hello_oper = {
 	.getattr	= ram_getattr,
 	.readdir	= ram_readdir,
@@ -523,7 +536,8 @@ static struct fuse_operations hello_oper = {
         .write          = ram_write,
 	.truncate	= ram_truncate,
 	.unlink 	= ram_unlink,
-	.rename     = ram_rename,       
+	.rename     = ram_rename,
+	.opendir	= ram_opendir,      
 };
 
 int main(int argc, char *argv[])
