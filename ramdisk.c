@@ -408,6 +408,7 @@ void remove_from_ds (Node * child) {
                 tmp = tmp->next;
 	    }
 	}
+	parent->data.st.st_nlink--;
 }
 
 static int ram_rmdir(const char *path) {
@@ -444,6 +445,59 @@ static int ram_unlink(const char* path) {
 	return 0;
 }
 
+static int ram_rename(const char * from, const char * to) {
+	Node * node1 = NULL;
+	Node * node2 = NULL;
+
+	int valid = check_path(from, &node1);
+	if (!valid) {
+		return -ENOENT;
+	}
+
+	valid = check_path(to, &node2);
+
+	char * ptr = strrchr(to, '/');
+	char tmp[MAX_NAME];
+	strncpy(tmp, to, ptr - to);
+    tmp[ptr - to] = '\0';
+	ptr++;
+
+	// check if to path exists nor not.
+	if (!valid) {
+		// check if parent of to path is valid
+    	valid = check_path(tmp, &node2);
+
+    	if (!valid) {
+    		return -ENOENT;
+    	}
+    	// Only have to rename file/dir
+    	if (node2 == node1->parent) { 
+    		//Quickly Exit
+    		strncpy(node1->data.name, ptr, MAX_NAME);
+    		return 0;
+    	}
+
+	} else {  // To path exists
+		if (node2->data.isdir) {		
+			if (node2->firstchild) {
+				return -EEXIST;
+			}
+			node2 = node2->parent;
+    		ram_rmdir(to);
+		} else {
+			node2 = node2->parent;
+			ram_unlink(to);
+		}	
+	}
+    remove_from_ds(node1);
+	node1->parent = node2;
+    node1->next = node2->firstchild;
+    node2->firstchild = node1;
+    node2->data.st.st_nlink++;
+    strncpy(node1->data.name, ptr, MAX_NAME);
+	return 0;
+}
+
 static struct fuse_operations hello_oper = {
 	.getattr	= ram_getattr,
 	.readdir	= ram_readdir,
@@ -455,7 +509,8 @@ static struct fuse_operations hello_oper = {
 	.create     = ram_create,
         .write          = ram_write,
 	.truncate	= ram_truncate,
-	.unlink 	= ram_unlink,        
+	.unlink 	= ram_unlink,
+	.rename     = ram_rename,       
 };
 
 int main(int argc, char *argv[])
