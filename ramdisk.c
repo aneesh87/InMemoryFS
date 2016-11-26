@@ -21,170 +21,172 @@
 
 #define MAX_NAME 512
 
-typedef struct __data {
-	char name[MAX_NAME];
-	int  isdir;
-	struct stat st;
-} Ndata;
+  typedef struct __data {
+  	char name[MAX_NAME];
+  	int  isdir;
+  	struct stat st;
+  } Ndata;
 
-typedef struct element {
-	Ndata data;
-	char * filedata;
-	struct element * parent;
-	struct element * firstchild;
-	struct element * next;
-} Node;
+  typedef struct element {
+  	Ndata data;
+  	char * filedata;
+  	struct element * parent;
+  	struct element * firstchild;
+  	struct element * next;
+  } Node;
 
-long freememory;
-Node * Root;
+  long freememory;
+  Node * Root;
 
+//below for extra credit
+  char filedump[MAX_NAME];
 
-int allocate_node(Node ** node) {
+  int allocate_node(Node ** node) {
 
-	if (freememory < sizeof(Node)) {
-		return -ENOSPC;
-	}
+  	if (freememory < sizeof(Node)) {
+  		return -ENOSPC;
+  	}
 
-	*node = calloc(1, sizeof(Node));
-	if (*node == NULL) {
-		return -ENOSPC;
-	} else {
-		freememory = freememory - sizeof(Node);
-		return 0;
-	}
-}
+  	*node = calloc(1, sizeof(Node));
+  	if (*node == NULL) {
+  		return -ENOSPC;
+  	} else {
+  		freememory = freememory - sizeof(Node);
+  		return 0;
+  	}
+  }
 
-void change_timestamps_dir(Node * parent) {
-	time_t T;
-	time(&T);
-	parent->data.st.st_ctime = T;
-	parent->data.st.st_mtime = T;
-}
+  void change_timestamps_dir(Node * parent) {
+  	time_t T;
+  	time(&T);
+  	parent->data.st.st_ctime = T;
+  	parent->data.st.st_mtime = T;
+  }
 
-int check_path(const char * path, Node ** n) {
+  int check_path(const char * path, Node ** n) {
 
-	char temp[MAX_NAME];
-	strncpy(temp, path, MAX_NAME);
+  	char temp[MAX_NAME];
+  	strncpy(temp, path, MAX_NAME);
 
-	if(strcmp(path, "/") == 0 || strcmp(path, "") == 0) {
-	   *n = Root;
-	   return 1;		
-	}
+  	if(strcmp(path, "/") == 0 || strcmp(path, "") == 0) {
+  		*n = Root;
+  		return 1;		
+  	}
 
-	char * ele = strtok(temp, "/");
-	Node * parent = Root;
-	Node * childptr = NULL;
-	while (ele != NULL) {
-		int found = 0;
-		childptr = parent->firstchild;
-		while (childptr != NULL) {
-			if(strcmp(childptr->data.name, ele) == 0) {
-				found = 1;
-				break;
-			}
-			childptr = childptr->next;
-		}
-		if (!found) {*n = NULL; return 0;}
+  	char * ele = strtok(temp, "/");
+  	Node * parent = Root;
+  	Node * childptr = NULL;
+  	while (ele != NULL) {
+  		int found = 0;
+  		childptr = parent->firstchild;
+  		while (childptr != NULL) {
+  			if(strcmp(childptr->data.name, ele) == 0) {
+  				found = 1;
+  				break;
+  			}
+  			childptr = childptr->next;
+  		}
+  		if (!found) {*n = NULL; return 0;}
 
-		ele = strtok(NULL, "/");
-		parent = childptr;
-	}
-	*n = childptr;
-	return 1;
-}
+  		ele = strtok(NULL, "/");
+  		parent = childptr;
+  	}
+  	*n = childptr;
+  	return 1;
+  }
 
-static int ram_getattr(const char *path, struct stat *stbuf)
-{
-	Node *t = NULL;
-	int valid = check_path(path, &t);
-	if (!valid) {
-		return -ENOENT;
-	} else {
-		*stbuf = t->data.st;
-		return 0;
-	}
-}
-
-
-static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi)
-{    
-    time_t T;
-    time(&T);
-
-    Node * parent = NULL;
-	
-	int valid = check_path(path, &parent);
-	if (!valid) {
-		return -ENOENT;
-	}
-
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-	
-	Node * temp = NULL;
-
-	for(temp = parent->firstchild; temp; temp = temp->next) {
-		filler(buf, temp->data.name, NULL, 0);
-	}
-	parent->data.st.st_atime = T;
+  static int ram_getattr(const char *path, struct stat *stbuf)
+  {
+  	Node *t = NULL;
+  	int valid = check_path(path, &t);
+  	if (!valid) {
+  		return -ENOENT;
+  	} else {
+  		*stbuf = t->data.st;
+  		return 0;
+  	}
+  }
 
 
-	return 0;
-}
+  static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+  	off_t offset, struct fuse_file_info *fi)
+  {    
+  	time_t T;
+  	time(&T);
 
-static int ram_open(const char *path, struct fuse_file_info *fi)
-{	
-	Node *p= NULL;
-	int valid = check_path(path, &p);
-	if (!valid) {
-		return -ENOENT;
-	}
-	return 0;
-}
+  	Node * parent = NULL;
+  	
+  	int valid = check_path(path, &parent);
+  	if (!valid) {
+  		return -ENOENT;
+  	}
 
-static int ram_read(const char *path, char *buf, size_t size, off_t offset,
-		      struct fuse_file_info *fi)
-{
-        time_t T;
+  	filler(buf, ".", NULL, 0);
+  	filler(buf, "..", NULL, 0);
+  	
+  	Node * temp = NULL;
 
-        Node * node = NULL;
-        int valid = check_path(path, &node);
-
-        if (!valid) {
-            return -ENOENT;
-        }
-        int filesize = node->data.st.st_size;
-
-        if (node->data.isdir) {
-            return -EISDIR;
-        }
-
-        time(&T);
-                       
-	if (offset < filesize) {
-            if (offset + size > filesize) {
-		size = filesize - offset;
-            }
-            memcpy(buf, node->filedata + offset, size);
-	} else {
-	    size = 0;
-        }
-
-	return size;
-}
+  	for(temp = parent->firstchild; temp; temp = temp->next) {
+  		filler(buf, temp->data.name, NULL, 0);
+  	}
+  	parent->data.st.st_atime = T;
 
 
-static int ram_utime(const char *path, struct utimbuf *ubuf)
-{
+  	return 0;
+  }
+
+  static int ram_open(const char *path, struct fuse_file_info *fi)
+  {	
+  	Node *p= NULL;
+  	int valid = check_path(path, &p);
+  	if (!valid) {
+  		return -ENOENT;
+  	}
+  	return 0;
+  }
+
+  static int ram_read(const char *path, char *buf, size_t size, off_t offset,
+  	struct fuse_file_info *fi)
+  {
+  	time_t T;
+
+  	Node * node = NULL;
+  	int valid = check_path(path, &node);
+
+  	if (!valid) {
+  		return -ENOENT;
+  	}
+  	int filesize = node->data.st.st_size;
+
+  	if (node->data.isdir) {
+  		return -EISDIR;
+  	}
+
+  	time(&T);
+  	
+  	if (offset < filesize) {
+  		if (offset + size > filesize) {
+  			size = filesize - offset;
+  		}
+  		memcpy(buf, node->filedata + offset, size);
+  	} else {
+  		size = 0;
+  	}
+
+  	return size;
+  }
+
+
+  static int ram_utime(const char *path, struct utimbuf *ubuf)
+  {
 	// Do Nothing
-	return 0;
-}
+  	return 0;
+  }
 
-void init_for_dir(Node * newchild, char * dname) {
-	
-	newchild->data.isdir = 1;
-	strcpy(newchild->data.name, dname);
+  void init_for_dir(Node * newchild, char * dname) {
+  	
+  	newchild->data.isdir = 1;
+  	strcpy(newchild->data.name, dname);
 
 	newchild->data.st.st_nlink = 2;   // . and ..
 	newchild->data.st.st_uid = getuid();
@@ -232,7 +234,7 @@ static int ram_mkdir(const char *path, mode_t mode) {
 	char * ptr = strrchr(path, '/');
 	char tmp[MAX_NAME];
 	strncpy(tmp, path, ptr - path);
-    tmp[ptr - path] = '\0';
+	tmp[ptr - path] = '\0';
 
 	valid = check_path(tmp, &parent);
 	if (!valid) {
@@ -245,8 +247,8 @@ static int ram_mkdir(const char *path, mode_t mode) {
 		return ret;
 	}
 
-    ptr++;
-    init_for_dir(newchild, ptr);
+	ptr++;
+	init_for_dir(newchild, ptr);
 	
 	parent->data.st.st_nlink = parent->data.st.st_nlink + 1;
 
@@ -260,90 +262,92 @@ static int ram_mkdir(const char *path, mode_t mode) {
 }
 
 static int ram_truncate(const char* path, off_t size) {
-        
+	
 	time_t T;
-        Node * node = NULL;
-        int valid = check_path(path, &node);
-        int filelen = node->data.st.st_size;
-        if (!valid) {
-            return -ENOENT;
-        }
-        if (node->data.isdir)   { return -EISDIR; }
-        if (size == filelen)    { return 0; }
-        //if (freememory < size)  { return -ENOSPC; }
-
-        if (size == 0) {
-	    if (node->filedata != NULL) {
-                free(node->filedata);
-	        node->filedata = NULL;
-                freememory = freememory+filelen;
-	    }
-        } else  {
-
-	    long int space_needed = size - filelen;
-	    if (space_needed > freememory) { return -ENOSPC; }
-
-            char * newptr = realloc(node->filedata, size * sizeof(char));
-            if (!newptr) {
-                return -ENOSPC;
-            } else {
-                // Old pointer becomes invalid , we have to amke it valid again
-                node->filedata = newptr;
-	        if (size > filelen) {
-	            memset(node->filedata + filelen, 0 , size - filelen);
-	        }
-	        freememory = freememory - space_needed;
-            }
-        }
-        node->data.st.st_size = size;
-        time(&T);
-        node->data.st.st_ctime = T;
-        node->data.st.st_mtime = T;
-        return 0;
-}
-static int ram_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-
-        time_t T;
 	Node * node = NULL;
 	int valid = check_path(path, &node);
 	int filelen = node->data.st.st_size;
 	if (!valid) {
-	    return -ENOENT;
+		return -ENOENT;
+	}
+	if (node->data.isdir)   { return -EISDIR; }
+	if (size == filelen)    { return 0; }
+        //if (freememory < size)  { return -ENOSPC; }
+
+	if (size == 0) {
+		if (node->filedata != NULL) {
+			free(node->filedata);
+			node->filedata = NULL;
+			freememory = freememory+filelen;
+		}
+	} else  {
+
+		long int space_needed = size - filelen;
+		if (space_needed > freememory) { return -ENOSPC; }
+
+		char * newptr = realloc(node->filedata, size * sizeof(char));
+		if (!newptr) {
+			return -ENOSPC;
+		} else {
+                	// Old pointer becomes invalid , we have to amke it valid again
+			node->filedata = newptr;
+			if (size > filelen) {
+				memset(node->filedata + filelen, 0 , size - filelen);
+			}
+			freememory = freememory - space_needed;
+		}
+	}
+	node->data.st.st_size = size;
+	time(&T);
+	node->data.st.st_ctime = T;
+	node->data.st.st_mtime = T;
+	return 0;
+}
+static int ram_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+
+	time_t T;
+	Node * node = NULL;
+	int valid = check_path(path, &node);
+	int filelen = node->data.st.st_size;
+	if (!valid) {
+		return -ENOENT;
 	}
 	if (node->data.isdir)   { return -EISDIR; }
 	if (size == 0)          { return 0; }
 	if (freememory < size)  { return -ENOSPC; }
 
 	if (filelen == 0) {
-	    offset = 0;
-	    node->filedata = calloc(size, sizeof(char));
-	    
-	    if (node->filedata == NULL) {
-	        return -ENOSPC;
-	    }
-	    freememory = freememory - size;
+		offset = 0;
+		node->filedata = calloc(size, sizeof(char));
+		
+		if (node->filedata == NULL) {
+			return -ENOSPC;
+		}
+		freememory = freememory - size;
 	} else if (offset + size > filelen) {
-	    
-	    if (offset > filelen) {
-	        offset = filelen;
-	    }
-	    char * newptr = realloc(node->filedata, (offset + size) * sizeof(char));
-	    if (!newptr) { 
-	        return -ENOSPC;
-	    } else {
+		
+		if (offset > filelen) {
+			offset = filelen;
+		}
+		char * newptr = realloc(node->filedata, (offset + size) * sizeof(char));
+		if (!newptr) { 
+			return -ENOSPC;
+		} else {
 	        // Old pointer becomes invalid , we have to amke it valid again
-	        node->filedata = newptr;
-	        long extra_space = offset + size - filelen;
-	        freememory = freememory - extra_space;    
-	    }
+			node->filedata = newptr;
+			long extra_space = offset + size - filelen;
+			freememory = freememory - extra_space;    
+		}
 	}
 	memcpy(node->filedata + offset, buf, size);
-	node->data.st.st_size = offset + size;
+	if (offset + size > filelen) {
+		node->data.st.st_size = offset + size;
+	}
 	time(&T);
 	node->data.st.st_ctime = T;
 	node->data.st.st_mtime = T;
 	return size;	    
- }
+}
 
 static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 
@@ -357,7 +361,7 @@ static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	char * ptr = strrchr(path, '/');
 	char tmp[MAX_NAME];
 	strncpy(tmp, path, ptr - path);
-        tmp[ptr - path] = '\0';
+	tmp[ptr - path] = '\0';
 
 	valid = check_path(tmp, &parent);
 	if (!valid) {
@@ -370,8 +374,8 @@ static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return ret;
 	}
 
-    ptr++;
-    init_for_file(newchild, ptr);
+	ptr++;
+	init_for_file(newchild, ptr);
 	
 	parent->data.st.st_nlink = parent->data.st.st_nlink + 1;
 
@@ -389,16 +393,16 @@ void remove_from_ds (Node * child) {
 	if (parent == NULL) { return;}
 
 	if (parent->firstchild == child) {
-	    parent->firstchild = child->next;
+		parent->firstchild = child->next;
 	} else {
-	    Node * tmp = parent->firstchild;
-	    while (tmp != NULL) {
-	        if (tmp->next == child) {
-	            tmp->next = child->next;
-	            break;
-	        }
-                tmp = tmp->next;
-	    }
+		Node * tmp = parent->firstchild;
+		while (tmp != NULL) {
+			if (tmp->next == child) {
+				tmp->next = child->next;
+				break;
+			}
+			tmp = tmp->next;
+		}
 	}
 	parent->data.st.st_nlink--;
 	change_timestamps_dir(parent);
@@ -408,7 +412,7 @@ static int ram_rmdir(const char *path) {
 	Node * node = NULL;
 	int valid = check_path(path, &node);
 	if (!valid) {
-	    return -ENOENT;
+		return -ENOENT;
 	}
 	if (!node->data.isdir) { return -ENOTDIR;   }
 	if (node->firstchild)  { return -ENOTEMPTY; }
@@ -421,17 +425,17 @@ static int ram_rmdir(const char *path) {
 static int ram_unlink(const char* path) {
 	
 	Node * node = NULL;
-        int valid = check_path(path, &node);
-        if (!valid) {
-            return -ENOENT;
-        }
-        if (node->data.isdir) { return -EISDIR;}
+	int valid = check_path(path, &node);
+	if (!valid) {
+		return -ENOENT;
+	}
+	if (node->data.isdir) { return -EISDIR;}
 	remove_from_ds(node);
 	long freed_mem = sizeof(Node);
 	if (node->filedata != NULL) {
-	   freed_mem = freed_mem + node->data.st.st_size;
-	   free(node->filedata);
-	   node->filedata = NULL;
+		freed_mem = freed_mem + node->data.st.st_size;
+		free(node->filedata);
+		node->filedata = NULL;
 	}
 	free(node);
 	freememory = freememory + freed_mem;
@@ -452,17 +456,17 @@ static int ram_rename(const char * from, const char * to) {
 	char * ptr = strrchr(to, '/');
 	char tmp[MAX_NAME];
 	strncpy(tmp, to, ptr - to);
-    tmp[ptr - to] = '\0';
+	tmp[ptr - to] = '\0';
 	ptr++;
 
 	// check if to path exists nor not.
 	if (!valid) {
 		// check if parent of to path is valid
-    	valid = check_path(tmp, &node2);
+		valid = check_path(tmp, &node2);
 
-    	if (!valid) {
-    		return -ENOENT;
-    	}
+		if (!valid) {
+			return -ENOENT;
+		}
 
 	} else {  // To path exists
 		if (node2->data.isdir) {		
@@ -470,27 +474,38 @@ static int ram_rename(const char * from, const char * to) {
 				return -ENOTEMPTY;
 			}
 			node2 = node2->parent;
-    		ram_rmdir(to);
+			ram_rmdir(to);
 		} else {
 			node2 = node2->parent;
 			ram_unlink(to);
 		}	
 	}
-    remove_from_ds(node1);
+	remove_from_ds(node1);
 	node1->parent = node2;
-    node1->next = node2->firstchild;
-    node2->firstchild = node1;
-    node2->data.st.st_nlink++;
-    strncpy(node1->data.name, ptr, MAX_NAME);
-    
-    time_t T;
-    time(&T);
-    node1->data.st.st_ctime = T;
+	node1->next = node2->firstchild;
+	node2->firstchild = node1;
+	node2->data.st.st_nlink++;
+	strncpy(node1->data.name, ptr, MAX_NAME);
+	
+	time_t T;
+	time(&T);
+	node1->data.st.st_ctime = T;
 	
 	change_timestamps_dir(node2);
 	return 0;
 }
 
+void ram_destroy(void* private_data) {
+	if  (filedump[0] == '\0') {
+		return;
+	} 
+	FILE *diskfile = fopen(filedump, "a+");
+	if (diskfile) {
+		//write DS to disk
+		fclose(diskfile);
+	}
+
+}
 
 static int ram_opendir(const char *path, struct fuse_file_info *fi) {
 	Node *p= NULL;
@@ -513,22 +528,16 @@ static struct fuse_operations hello_oper = {
 	.rmdir		= ram_rmdir,
 	.mkdir		= ram_mkdir,
 	.create     = ram_create,
-        .write          = ram_write,
+	.write          = ram_write,
 	.truncate	= ram_truncate,
 	.unlink 	= ram_unlink,
 	.rename     = ram_rename,
-	.opendir	= ram_opendir,      
+	.destroy	= ram_destroy,
+	.opendir	= ram_opendir,    
 };
 
 int main(int argc, char *argv[])
 {
-	FILE *fp;
-	fp = fopen("/home/agupta27/log.txt","w+");
-	fclose(fp);
-
-	//for extra credit
-	char filedump[MAX_NAME];
-
 	if (argc < 3) {
 		fprintf(stderr, "ramdisk:Too few arguments\n");
 		fprintf(stderr, "ramdisk <mount_point> <size>");
@@ -541,36 +550,43 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if (argc == 4) {
-		strncpy(filedump, argv[3], MAX_NAME);
-		argc--;
-	}
-
 	freememory = atol(argv[2]) * 1024 * 1024;
 	if (freememory <= 0) {
 		fprintf(stderr, "Invalid Memory Size\n");
 		return -1;
 	}
+	int init_done = 0;
+
+	if (argc == 4) {
+		strncpy(filedump, argv[3], MAX_NAME);
+		FILE *diskfile = fopen(filedump,"r");
+		if (diskfile) {
+        	// Read from disk into ds
+			init_done = 1;
+			fclose(diskfile);
+		}
+		argc--;
+	}
 
 	//initialize the root
+	if (!init_done) {
+		
+		Root = (Node *)calloc(1, sizeof(Node));
+		strcpy(Root->data.name, "/");
+		Root->data.isdir = 1;
+		Root->data.st.st_nlink = 2;   // . and ..
+		Root->data.st.st_uid = 0;
+		Root->data.st.st_gid = 0;
+		Root->data.st.st_mode = S_IFDIR |  0755; //755 is default directory permissions
 
+		time_t T;
+		time(&T);
 
-	Root = (Node *)calloc(1, sizeof(Node));
-	strcpy(Root->data.name, "/");
-	Root->data.isdir = 1;
-	Root->data.st.st_nlink = 2;   // . and ..
-	Root->data.st.st_uid = 0;
-	Root->data.st.st_gid = 0;
-	Root->data.st.st_mode = S_IFDIR |  0755; //755 is default directory permissions
-
-	time_t T;
-	time(&T);
-
-	Root->data.st.st_size = 4096;
-	Root->data.st.st_atime = T;
-	Root->data.st.st_mtime = T;
-	Root->data.st.st_ctime = T;
-	freememory = freememory - sizeof(Node); 
-
+		Root->data.st.st_size = 4096;
+		Root->data.st.st_atime = T;
+		Root->data.st.st_mtime = T;
+		Root->data.st.st_ctime = T;
+		freememory = freememory - sizeof(Node);
+	}
 	return fuse_main(argc-1, argv, &hello_oper, NULL);
 }
