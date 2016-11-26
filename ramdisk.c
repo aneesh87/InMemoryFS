@@ -21,11 +21,6 @@
 
 #define MAX_NAME 512
 
-//Globals
-
-//static const char *hello_str = "Hello World!\n";
-//static const char *hello_path = "/hello";
-
 typedef struct __data {
 	char name[MAX_NAME];
 	int  isdir;
@@ -100,7 +95,6 @@ int check_path(const char * path, Node ** n) {
 
 static int ram_getattr(const char *path, struct stat *stbuf)
 {
-
 	Node *t = NULL;
 	int valid = check_path(path, &t);
 	if (!valid) {
@@ -114,8 +108,7 @@ static int ram_getattr(const char *path, struct stat *stbuf)
 
 static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
-{
-    
+{    
     time_t T;
     time(&T);
 
@@ -141,13 +134,7 @@ static int ram_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 }
 
 static int ram_open(const char *path, struct fuse_file_info *fi)
-{
-	FILE *fp;
-	fp = fopen("/home/agupta27/log.txt","a+");
-	fprintf(fp, "%s\n", "open");
-	fprintf(fp, "%s\n", path);
-	fclose(fp);
-	
+{	
 	Node *p= NULL;
 	int valid = check_path(path, &p);
 	if (!valid) {
@@ -159,14 +146,7 @@ static int ram_open(const char *path, struct fuse_file_info *fi)
 static int ram_read(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi)
 {
-	FILE *fp;
         time_t T;
-
-	fp = fopen("/home/agupta27/log.txt","a+");
-	
-	fprintf(fp, "%s\n", "read");
-	fprintf(fp, "%s\n", path);
-	fclose(fp);
 
         Node * node = NULL;
         int valid = check_path(path, &node);
