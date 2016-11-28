@@ -41,21 +41,6 @@
 //below for extra credit
   char filedump[MAX_NAME];
 
-  const char* log_file = "/home/agupta27/log.txt";
-
-void create_logger () {
-   FILE *fp;
-   fp = fopen(log_file, "w+");
-   fclose(fp);
-}
-
-void log_util(const char * function_name, const char * message) {
-   FILE *fp;
-   fp = fopen(log_file, "a+");
-   fprintf(fp, "FUNCTION ::  %s\n", function_name);
-   fprintf(fp, "%s\n", message);
-   fclose(fp);
-}
 
   int allocate_node(Node ** node) {
 
@@ -239,9 +224,6 @@ void init_for_file(Node * newchild, char * fname) {
 }
 
 static int ram_mkdir(const char *path, mode_t mode) {
-	char mem[100];
-    sprintf(mem, "freememory is : %d sizeofnode = %d", freememory, sizeof(Node));
-	log_util("ram_mkdir", mem);
 
 	Node *parent = NULL;
 	int valid = check_path(path, &parent);
@@ -323,9 +305,6 @@ static int ram_truncate(const char* path, off_t size) {
 	return 0;
 }
 static int ram_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-	char mem[100];
-    sprintf(mem, "freememory is : %d size = %d", freememory, size);
-	log_util("ram_write", mem);
 
 	time_t T;
 	Node * node = NULL;
@@ -373,9 +352,6 @@ static int ram_write(const char *path, const char *buf, size_t size, off_t offse
 
 static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 	
-	char mem[100];
-    sprintf(mem, "freememory is : %d sizeofnode = %d", freememory, sizeof(Node));
-	log_util("ram_create", mem);
 	Node *parent = NULL;
 	int valid = check_path(path, &parent);
 
@@ -396,7 +372,6 @@ static int ram_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	int ret = allocate_node(&newchild);
 
 	if(ret != 0) {
-		log_util("ram_create","alloc failed");
 		return ret;
 	}
 
@@ -526,8 +501,7 @@ FILE * diskfile;
 
 void serialize(Node * parent) {
 
-	log_util("serial", parent->data.name);
-	fprintf(stderr, "%s\n",parent->data.name);
+	//fprintf(stderr, "%s\n",parent->data.name);
 	int num_child = parent->data.st.st_nlink - 2;
 	int i = 0;
 	Node * temp = parent->firstchild;
@@ -557,9 +531,9 @@ void ram_destroy(void* private_data) {
 }
 
 void deserialize(Node * parent) {
-	fprintf(stderr, "deserial%s\n",parent->data.name);
+	//fprintf(stderr, "deserial%s\n",parent->data.name);
 	int num_child = parent->data.st.st_nlink -2;	
-	fprintf(stderr, "deserial=%d\n",num_child);
+	//fprintf(stderr, "deserial=%d\n",num_child);
 	int i;
 	Node * x;
 	Node * cur;
@@ -690,6 +664,5 @@ int main(int argc, char *argv[])
 		Root->data.st.st_ctime = T;
 		freememory = freememory - sizeof(Node);
 	}
-	create_logger();
 	return fuse_main(argc-1, argv, &hello_oper, NULL);
 }
